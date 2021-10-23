@@ -1,6 +1,6 @@
 # mlb_player_hometowns
 
-This was my second-ever personal coding project (non-work, non-school, non-set-of-tutorials); I did most of the initial work on this in 2018 and have been on this little by little since then.  
+This was my second-ever personal coding project (non-work, non-school, non-set-of-tutorials); I did most of the initial work on this in 2018 and have been working on this little by little since then.  
 
 **What does this do?** 
 
