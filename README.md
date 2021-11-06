@@ -1,12 +1,12 @@
 # mlb_player_hometowns
 
-This was my second-ever personal coding project (non-work, non-school, non-set-of-tutorials); I did most of the initial work on this in 2018 and have been working on this little by little since then.  
+This was my second-ever personal (non-work, non-school) coding project; I did most of the initial work on this in 2018 and have been working on it little by little since then.  
 
 **What does this do?** 
 
-Uses the requests and bs4 libraries to web-scrape the player pages of mlb.com, and then for a given MLB team (or for all 30 teams if you like):
-* uses gmplot to make a html/javascript file for viewing in a browser
-* uses simplekml to make a kml file for viewing in Google Earth 
+It uses the _requests_ and _bs4_ libraries to web-scrape the player pages on the various team pages of https://www.mlb.com/, and then for a given MLB team (or for all 30 teams if you like):
+* uses _gmplot_ to make a html/javascript file for viewing in a browser
+* uses _simplekml_ to make a kml file for viewing in Google Earth 
 
 Example: locations of Seattle Mariners' hometowns, as of October 2021: 
 ![image](https://user-images.githubusercontent.com/18272668/137645235-ef97a441-c3ca-4d16-ad39-3f5d2d8947b8.png)
