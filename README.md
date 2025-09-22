@@ -4,7 +4,7 @@ This was my second-ever personal (non-work, non-school) coding project; I did mo
 
 **What does this do?** 
 
-It uses the _requests_ and _bs4_ libraries to web-scrape the player pages on the various team pages of https://www.mlb.com/, and then for a given MLB team (or for all 30 teams if you like):
+It uses the _requests_ and _bs4_ libraries to web-scrape the player pages on the various team pages of https://www.mlb.com/, to get each player's birth place, and then for a given MLB team (or for all 30 teams if you like):
 * uses _gmplot_ to make a html/javascript file for viewing in a browser
 * uses _simplekml_ to make a kml file for viewing in Google Earth 
 
