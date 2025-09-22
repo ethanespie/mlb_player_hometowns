@@ -17,7 +17,7 @@ And another of the Mariners that I happened to still on my machine from April 20
 
 **Why MLB player hometowns?**  
 
-I've always loved baseball (though admittedly, follow it less than I used to). And I always thought it kind of cool how many MLB players come from foreign countries, especially Latin America. I wanted to see a map of all of their home towns; and as far as I could tell at the time there wasn't one out there. 
+I've always loved baseball and I always thought it was kind of cool how many MLB players come from foreign countries, especially Latin America. I wanted to see a map of all of their home towns; and as far as I could tell at the time there wasn't one out there. 
 
 There is this, but it's only of the US:
 http://www.slate.com/articles/sports/culturebox/2014/10/baseball_player_map_a_new_u_s_map_based_on_where_baseball_players_were_born.html
