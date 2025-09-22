@@ -10,7 +10,7 @@ It uses the _requests_ and _bs4_ libraries to web-scrape the player pages on the
 
 Example: locations of Seattle Mariners' hometowns, as of October 2021: 
 ![image](https://user-images.githubusercontent.com/18272668/137645235-ef97a441-c3ca-4d16-ad39-3f5d2d8947b8.png)
-And another of the Mariners that I happened to still on my machine from April 2018 during Ichiro's return to Seattle:
+And another of the Mariners that I happened to still have on my machine from April 2018 during Ichiro's return to Seattle:
 ![image](https://user-images.githubusercontent.com/18272668/137645395-43b90b5e-23fa-420f-89f3-fc000996d672.png)
 
 
