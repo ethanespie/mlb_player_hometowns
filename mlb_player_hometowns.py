@@ -13,14 +13,13 @@ generate maps for individual teams or all MLB teams at once.
 import sys
 import os
 import re
-import csv
 from datetime import datetime
 import requests
 import bs4
 from geopy.geocoders import Nominatim
 import gmplot
 import simplekml
-from mlb_player_hometowns_enums import State
+from constants import State, TEAM_REGISTRY
 
 
 START_TIME = datetime.now()
@@ -198,7 +197,7 @@ def prompt_user():
     Display team options and get user selection for processing.
     """
     global ALL_TEAMS
-    teams = read_csv()
+    teams = read_teams()
     while True:
         print("\nPick an MLB team to see a map of its players' home towns: \n")
 
@@ -212,7 +211,7 @@ def prompt_user():
             ALL_TEAMS = True
             return teams  # (all teams)
         for team in teams:
-            if team.short_code == user_input:
+            if team.short_code == user_input.lower():
                 team = [team]
                 return team
 
@@ -224,7 +223,7 @@ def prompt_user():
 
 def process_list_of_teams(teams):
     """
-    Called by if-name-main, which passes teasm, a list of Team objects.
+    Called by if-name-main, which passes teams, a list of Team objects.
     For each Team, it calls process_team to get list of players.
     Then calls the method to create gmplot and kml files.
     """
@@ -248,29 +247,11 @@ def process_list_of_teams(teams):
         )
 
 
-def read_csv():
-    """
-    Read CSV of team info (names, codes, and colors for map markers) and make list of Team objects
-    """
-    teams = []
-    try:
-        with open("mlb_teams.csv", newline="", encoding="utf-8-sig") as csvfile:
-            csv_reader = csv.reader(csvfile, delimiter=",")
-            for row in csv_reader:
-                team = Team(
-                    row[0],  # full_name
-                    row[1],  # url_code
-                    row[2],  # short_code <-- maybe get rid of?  was this for old URLs?
-                    row[3],
-                )  # webcolor
-                teams.append(team)
-            return teams
-    except OSError:
-        write_log_and_or_console(
-            "ERROR:  There was a problem reading mlb_teams.csv. Check the "
-            "file and try again."
-        )
-        sys.exit()
+def read_teams():
+    return [
+        Team(meta.full_name, meta.url_code, meta.short_code, meta.webcolor)
+        for meta in TEAM_REGISTRY.values()
+    ]
 
 
 def prep_place_name_for_geocode(player_hometown):
@@ -278,7 +259,7 @@ def prep_place_name_for_geocode(player_hometown):
     Clean and standardize hometown strings to improve geocoding success.
     """
     # Most players' 2-letter US state codes worked but for some, "CA" ended up in Canada,
-    # and there were a few other random similar errors, so:
+    # and there were a few other random errors, so, replace 2-letter state code with name.
     names = [member.name for member in State]
     if player_hometown[-2:] in names:
         code = player_hometown[-2:]
