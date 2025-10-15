@@ -1,13 +1,31 @@
+"""
+Constants module containing MLB team specifications and US state enumerations.
+
+This module provides constant definitions for:
+- MLB team specifications including names, codes and colors
+- US states and territories abbreviations and full names
+"""
+
 from enum import Enum
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class TeamSpec:
+    """
+    Immutable specification for MLB team details.
+
+    Attributes:
+        full_name (str): Complete team name
+        url_code (str): Code used in URLs
+        short_code (str): Three-letter team abbreviation
+        web_color (str): Hex color code for web display
+        readable_color (str): Human-readable color name
+    """
     full_name: str
     url_code: str
     short_code: str
-    webcolor: str
+    web_color: str
     readable_color: str
 
 
@@ -46,6 +64,11 @@ TEAM_REGISTRY: dict[str, TeamSpec] = {
 
 
 class State(Enum):
+    """
+    US states and territories enumeration with mapping between abbreviations and full names.
+    Used for pre-geocoding prep; converting two letter codes to full names.
+    ("CA" was sometimes locating in Canada; and other randome issues)
+    """
     AK = "Alaska"
     AL = "Alabama"
     AR = "Arkansas"

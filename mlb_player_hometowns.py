@@ -9,16 +9,13 @@ generate maps for individual teams or all MLB teams at once.
 
 # pylint: disable=import-error
 
-
-import sys
 import os
 import re
 from datetime import datetime
 import requests
 import bs4
 from geopy.geocoders import Nominatim
-import gmplot
-import simplekml
+import folium
 from constants import State, TEAM_REGISTRY
 
 
@@ -39,14 +36,14 @@ class Team:
     player_pages_not_reached = 0
     players_not_geocoded = 0
 
-    def __init__(self, fullname, url_code, short_code, webcolor):
+    def __init__(self, fullname, url_code, short_code, web_color):
         """
         Initialize a Team object with team identifiers and display properties.
         """
         self.full_name = fullname
         self.url_code = url_code
         self.short_code = short_code
-        self.webcolor = webcolor
+        self.web_color = web_color
 
     def process_team(self, res, team_name):
         """
@@ -60,9 +57,11 @@ class Team:
         soup = bs4.BeautifulSoup(res.text, "html.parser")
         player_anchors = soup.find_all("a", href=re.compile("^/player/"))
         player_list = []
-        for anch in player_anchors:
-            player = Player(anch.text)
-            url = "https://www.mlb.com" + anch.get("href")
+
+
+        for anchor in player_anchors:
+            player = Player(anchor.text)
+            url = "https://www.mlb.com" + anchor.get("href")
             # go to each player page
             try:
                 res = requests.get(url, timeout=10)
@@ -227,6 +226,7 @@ def process_list_of_teams(teams):
     For each Team, it calls process_team to get list of players.
     Then calls the method to create gmplot and kml files.
     """
+
     for team in teams:
 
         team_url = f"https://www.mlb.com/{team.url_code}/roster/"
@@ -242,14 +242,15 @@ def process_list_of_teams(teams):
             write_log_and_or_console(f"ERROR:  URL {team_url} could not be located.\n")
             continue
         player_list, total_players_not_mappable = team.process_team(res, team.full_name)
-        make_gmplot_and_kml(
-            player_list, team.url_code, team.webcolor, total_players_not_mappable
+
+        make_folium_map(
+            player_list, team.url_code, team.web_color, total_players_not_mappable
         )
 
 
 def read_teams():
     return [
-        Team(meta.full_name, meta.url_code, meta.short_code, meta.webcolor)
+        Team(meta.full_name, meta.url_code, meta.short_code, meta.web_color)
         for meta in TEAM_REGISTRY.values()
     ]
 
@@ -278,49 +279,75 @@ def prep_place_name_for_geocode(player_hometown):
     return player_hometown
 
 
-def make_gmplot_and_kml(players, team_code, team_color, num_missing):
+
+def make_folium_map(players, team_code, team_color_hex, num_missing):
     """
-    Generate HTML (Google Maps) and KML (Google Earth) files showing player hometowns.
-    Creates two visualization files:
-    - An HTML file using gmplot for web browser viewing with Google Maps
-    - A KML file for viewing in Google Earth with custom markers and player information
-    Files are saved in the 'output' directory with team code and timestamp in the filename.
+    Generate a Leaflet (Folium) HTML map of player hometowns for one team.
+    Saves a single standalone .html into ./output
     """
-    kml = simplekml.Kml()
-    gmap = gmplot.GoogleMapPlotter(
-        19, -111, 3
-    )  # (Lat/Long for center of map;  3 for zoom level)
-    # Reason for 19 N, 111 W: to have North/South America in the center of the map, since most MLB
-    # players are from those two continents
-    gmap.coloricon = "http://www.googlemapsmarkers.com/v1/%s/"
-    # ^^^ (https://github.com/vgm64/gmplot/issues/18, comment from 12/5/16)
 
-    for player in players:
-        if player.hometown_lat != -1 and player.hometown_long != -1:
+    # --- Basemap switcher (OSM + CartoDB Positron + CartoDB Dark) ---
+    m = folium.Map(location=[19, -111], zoom_start=3, tiles=None, prefer_canvas=True)
 
-            # For KML file, for loading in Google Earth:
-            pnt = kml.newpoint(
-                name=player.player_name
-                + " ("
-                + player.position
-                + ") - "
-                + player.hometown,
-                coords=[(player.hometown_long, player.hometown_lat)],
-            )
-            pnt.style.iconstyle.scale = 3
-            pnt.style.iconstyle.icon.href = (
-                "http://maps.google.com/mapfiles/kml/paddle/grn-circle.png"
-            )
-            # ^^^ taken from http://kml4earth.appspot.com/icons.html
+    # OpenStreetMap (default)
+    folium.TileLayer(
+        tiles="OpenStreetMap",
+        name="OpenStreetMap",
+        control=True,
+        show=True,  # make this the default visible basemap
+    ).add_to(m)
 
-            # For gmplot HTML file:
-            gmap.marker(
-                player.hometown_lat,
-                player.hometown_long,
-                team_color,
-                None,
-                player.player_name + " (" + player.position + ") - " + player.hometown,
-            )
+    # CartoDB Positron (light gray)
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        attr="© OpenStreetMap contributors © CARTO",
+        name="CartoDB Positron",
+        subdomains=["a", "b", "c", "d"],
+        control=True,
+        show=False,
+    ).add_to(m)
+
+    # CartoDB Dark Matter
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        attr="© OpenStreetMap contributors © CARTO",
+        name="CartoDB Dark Matter",
+        subdomains=["a", "b", "c", "d"],
+        control=True,
+        show=False,
+    ).add_to(m)
+
+    # # Layer control (upper-right toggle)
+    # folium.LayerControl(position="topright").add_to(m)
+
+    for p in players:
+        if (
+            getattr(p, "hometown_lat", -1) != -1
+            and getattr(p, "hometown_long", -1) != -1
+        ):
+            # popup_html = folium.Popup(f"<b>{p.player_name}</b> ({p.position}) -- {p.hometown}"
+            #     f"<br>TO DO: eventually add ERA for pitchers, batting avg for others, etc",
+            #     max_width=400
+            # )
+
+            # Folium expects color names for CircleMarker; for strict hex, we set fill=True.
+            folium.CircleMarker(
+                location=[p.hometown_lat, p.hometown_long],
+                radius=6,
+                color="black",
+                weight=1,
+                fill=True,
+                fill_opacity=0.9,
+                fill_color=team_color_hex,
+                # popup=popup_html,
+                tooltip=folium.Tooltip(
+                    f"<div style='font-size:12px'><b>{p.player_name}</b> ({p.position}) -- "
+                    f"{p.hometown}</div>"
+                ),
+            ).add_to(m)
+
+    # Optional legend-ish control
+    folium.LayerControl().add_to(m)
 
     filename = (
         f"MLB_player_hometowns_{team_code.upper()}_{START_TIME.strftime('%Y%m%d_%H%M')}"
@@ -328,10 +355,7 @@ def make_gmplot_and_kml(players, team_code, team_color, num_missing):
     if num_missing > 0:
         filename = f"{filename}__{str(num_missing)}_missing"
 
-    gmap.draw(os.path.join("output", (filename + ".html")))
-
-    # not sure why but the KML needs os.path.expanduser but the HTML doesn't
-    kml.save(os.path.expanduser(os.path.join("output", (filename + ".kml"))))
+    m.save(os.path.join("output", filename + ".html"))
 
 
 def write_log_and_or_console(text):

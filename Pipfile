@@ -10,6 +10,7 @@ geopy = "*"
 geocoder = "*"
 gmplot = "*"
 simplekml = "*"
+folium = "*"
 
 [dev-packages]
 
