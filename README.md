@@ -5,8 +5,10 @@ This was my second-ever personal (non-work, non-school) coding project; I did mo
 **What does this do?** 
 
 It uses the _requests_ and _bs4_ libraries to web-scrape the player pages on the various team pages of https://www.mlb.com/, to get each player's birth place, and then for a given MLB team (or for all 30 teams if you like):
-* uses _gmplot_ to make a html/javascript file for viewing in a browser
-* uses _simplekml_ to make a kml file for viewing in Google Earth 
+
+* uses _folium_ to make a html/javascript file for viewing in a browser
+* ~~uses _gmplot_ to make a html/javascript file for viewing in a browser~~
+* ~~uses _simplekml_ to make a kml file for viewing in Google Earth~~ 
 
 Example: locations of Seattle Mariners' hometowns, as of October 2021: 
 ![image](https://user-images.githubusercontent.com/18272668/137645235-ef97a441-c3ca-4d16-ad39-3f5d2d8947b8.png)
@@ -24,3 +26,4 @@ http://www.slate.com/articles/sports/culturebox/2014/10/baseball_player_map_a_ne
 
 And then there's this, but the map/site mentioned seems to no longer exist.
 https://www.cbssports.com/mlb/news/map-of-the-day-birthplace-of-all-professional-baseball-players/
+
