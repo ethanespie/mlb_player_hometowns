@@ -11,6 +11,8 @@ geocoder = "*"
 gmplot = "*"
 simplekml = "*"
 folium = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [dev-packages]
 

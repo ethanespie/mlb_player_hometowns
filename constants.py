@@ -22,6 +22,7 @@ class TeamSpec:
         web_color (str): Hex color code for web display
         readable_color (str): Human-readable color name
     """
+
     full_name: str
     url_code: str
     short_code: str
@@ -69,6 +70,7 @@ class State(Enum):
     Used for pre-geocoding prep; converting two letter codes to full names.
     ("CA" was sometimes locating in Canada; and other randome issues)
     """
+
     AK = "Alaska"
     AL = "Alabama"
     AR = "Arkansas"

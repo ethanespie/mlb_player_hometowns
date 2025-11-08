@@ -58,7 +58,6 @@ class Team:
         player_anchors = soup.find_all("a", href=re.compile("^/player/"))
         player_list = []
 
-
         for anchor in player_anchors:
             player = Player(anchor.text)
             url = "https://www.mlb.com" + anchor.get("href")
@@ -249,6 +248,7 @@ def process_list_of_teams(teams):
 
 
 def read_teams():
+    """ Read team data from TEAM_REGISTRY and return a list of Team objects."""
     return [
         Team(meta.full_name, meta.url_code, meta.short_code, meta.web_color)
         for meta in TEAM_REGISTRY.values()
@@ -277,7 +277,6 @@ def prep_place_name_for_geocode(player_hometown):
         player_hometown = player_hometown.replace(" Centro", "")
 
     return player_hometown
-
 
 
 def make_folium_map(players, team_code, team_color_hex, num_missing):
