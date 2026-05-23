@@ -25,6 +25,8 @@ START_TIME = datetime.now()
 LOG_NAME = f"MLB_player_hometowns_{START_TIME.strftime('%Y%m%d_%H%M')}.txt"
 GEOLOCATOR = Nominatim(user_agent="mlb_player_hometowns_app")
 ALL_TEAMS = False
+# Directory where output files (maps, logs) are written. Tests may override this.
+OUTPUT_DIR = "output"
 
 # simple in-memory cache + throttling controls to avoid public Nominatim 429s
 GEOCODE_CACHE = {}
@@ -196,14 +198,14 @@ def initial_setup():
     The output folder is created relative to the current working directory. Any existing log
     file for the current timestamp is removed so reruns in the same minute start cleanly.
     """
-    # Create 'output' sub folder if it doesn't exist
+    # Create output dir if it doesn't exist
     try:
-        os.mkdir("output")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
     except OSError:
         pass
     # Delete log if already exists (used for scenario of script run/cancelled/rerun in same minute)
     try:
-        os.remove(os.path.join("output", LOG_NAME))
+        os.remove(os.path.join(OUTPUT_DIR, LOG_NAME))
     except OSError:
         pass
 
@@ -364,7 +366,7 @@ def make_folium_map(players, team_code, team_color_hex, num_missing):
     """
 
     # --- Basemap switcher (OSM + CartoDB Positron + CartoDB Dark) ---
-    m = folium.Map(location=[19, -111], zoom_start=3, tiles=None, prefer_canvas=True)
+    m = folium.Map(location=[19, -111], zoom_start=2, tiles=None, prefer_canvas=True)
 
     # OpenStreetMap (default)
     folium.TileLayer(
@@ -432,7 +434,12 @@ def make_folium_map(players, team_code, team_color_hex, num_missing):
     if num_missing > 0:
         filename = f"{filename}__{str(num_missing)}_missing"
 
-    m.save(os.path.join("output", filename + ".html"))
+    # ensure output dir exists (in case caller changed OUTPUT_DIR)
+    try:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+    except OSError:
+        pass
+    m.save(os.path.join(OUTPUT_DIR, filename + ".html"))
 
 
 def write_log_and_or_console(text):
@@ -441,7 +448,11 @@ def write_log_and_or_console(text):
     """
     print(text)
     if ALL_TEAMS:
-        with open(os.path.join("output", LOG_NAME), "a", encoding="utf-8") as text_file:
+        try:
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+        except OSError:
+            pass
+        with open(os.path.join(OUTPUT_DIR, LOG_NAME), "a", encoding="utf-8") as text_file:
             text_file.write(text + "\n")
 
 

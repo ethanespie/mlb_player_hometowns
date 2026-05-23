@@ -220,14 +220,16 @@ def test_team_process_team_and_read_teams(monkeypatch, tmp_path):
 def test_make_folium_map_creates_output(monkeypatch, tmp_path):
     """Verify the map writer creates a team HTML file in the local `output/` folder."""
     mod = _load_target_module()
-    outdir = pathlib.Path("output")
+    outdir = pathlib.Path(tmp_path) / "test_output"
+    # point module output at a temporary test folder so repo files are not modified
+    mod.OUTPUT_DIR = str(outdir)
     # ensure a clean output dir for test
     if outdir.exists():
         for f in outdir.iterdir():
             if f.is_file():
                 f.unlink()
     else:
-        outdir.mkdir()
+        outdir.mkdir(parents=True, exist_ok=True)
 
     # create two Player-like objects with lat/long
     class P:
@@ -261,9 +263,10 @@ def test_make_folium_map_creates_output(monkeypatch, tmp_path):
 def test_initial_setup_creates_output_and_clears_log(tmp_path):
     """Verify startup setup creates `output/` and removes the current run log."""
     mod = _load_target_module()
-    # create output and a dummy log file
-    outdir = pathlib.Path("output")
-    outdir.mkdir(exist_ok=True)
+    # create output and a dummy log file in a temporary location so tests do not clobber repo files
+    outdir = pathlib.Path(tmp_path) / "test_output"
+    mod.OUTPUT_DIR = str(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
     logpath = outdir / mod.LOG_NAME
     logpath.write_text("dummy")
     assert logpath.exists()
@@ -276,8 +279,9 @@ def test_initial_setup_creates_output_and_clears_log(tmp_path):
 def test_write_log_and_or_console_writes_when_all_teams(tmp_path):
     """Verify log messages are written to disk when the all-teams mode is enabled."""
     mod = _load_target_module()
-    outdir = pathlib.Path("output")
-    outdir.mkdir(exist_ok=True)
+    outdir = pathlib.Path(tmp_path) / "test_output"
+    mod.OUTPUT_DIR = str(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
     logpath = outdir / mod.LOG_NAME
     if logpath.exists():
         logpath.unlink()
@@ -292,14 +296,15 @@ def test_write_log_and_or_console_writes_when_all_teams(tmp_path):
 def test_make_folium_map_with_no_players_creates_output(monkeypatch, tmp_path):
     """Verify the map writer still creates an HTML file when there are no players."""
     mod = _load_target_module()
-    outdir = pathlib.Path("output")
+    outdir = pathlib.Path(tmp_path) / "test_output"
+    mod.OUTPUT_DIR = str(outdir)
     # ensure a clean output dir for test
     if outdir.exists():
         for f in outdir.iterdir():
             if f.is_file():
                 f.unlink()
     else:
-        outdir.mkdir()
+        outdir.mkdir(parents=True, exist_ok=True)
 
     # monkeypatch the Map.save on the folium instance loaded inside the module
     def fake_save(self, path):
