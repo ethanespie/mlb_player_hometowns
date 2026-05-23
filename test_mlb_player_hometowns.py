@@ -1,8 +1,9 @@
 """
-Unit tests for mlb_player_hometowns.py.
+Unit tests for `mlb_player_hometowns.py`.
 
-These tests load the target module from the local file, inject minimal dummy
-dependencies, and monkeypatch network / I/O to keep tests deterministic.
+These tests import the target module from the local file, provide lightweight dummy
+`constants` and `geopy` modules when needed, and monkeypatch network and file output so
+the suite stays deterministic on any machine.
 """
 
 import importlib.util
@@ -15,10 +16,11 @@ import pytest
 
 
 def _load_target_module():
-    """Load mlb_player_hometowns.py from the local directory with minimal dummies.
+    """Load `mlb_player_hometowns.py` with lightweight fallback dependencies.
 
-    Provides a lightweight 'constants' and 'geopy.geocoders' if they're not
-    available in the test environment, then imports the target module by file.
+    The helper injects small stand-ins for `constants`, `geopy.geocoders`, and
+    `geopy.exc` if the real packages are not present, then imports the module directly
+    from the workspace so the tests can run in isolation.
     """
     here = os.path.dirname(__file__)
     target_path = os.path.join(here, "mlb_player_hometowns.py")
@@ -60,6 +62,16 @@ def _load_target_module():
     if "geopy.geocoders" not in sys.modules:
         geopy_pkg = ModuleType("geopy")
         geopy_geo = ModuleType("geopy.geocoders")
+        geopy_exc = ModuleType("geopy.exc")
+
+        class _GeopyError(Exception):
+            pass
+
+        class _GeocoderRateLimited(_GeopyError):
+            pass
+
+        geopy_exc.GeopyError = _GeopyError
+        geopy_exc.GeocoderRateLimited = _GeocoderRateLimited
 
         class DummyNominatim:
             def __init__(self, user_agent=None):
@@ -72,6 +84,7 @@ def _load_target_module():
         geopy_geo.Nominatim = DummyNominatim
         sys.modules["geopy"] = geopy_pkg
         sys.modules["geopy.geocoders"] = geopy_geo
+        sys.modules["geopy.exc"] = geopy_exc
 
     # Load module from file path
     spec = importlib.util.spec_from_file_location("mlb_player_hometowns", target_path)
@@ -83,7 +96,7 @@ def _load_target_module():
 
 
 def test_prep_place_name_for_geocode_replacements():
-    """Ensure common place-name normalization and replacement rules work."""
+    """Verify the hometown normalization rules replace known MLB.com quirks."""
     mod = _load_target_module()
     # ends-with-state code replacement
     original = "Somecity CA"
@@ -99,7 +112,7 @@ def test_prep_place_name_for_geocode_replacements():
 
 
 def _make_response(text):
-    """Create a minimal response-like object for mocking requests.get."""
+    """Create a minimal response-like object for mocked `requests.get` calls."""
     class R:
         def __init__(self, t):
             self.text = t
@@ -111,7 +124,7 @@ def _make_response(text):
 
 
 def test_player_get_player_info_success_and_failure(monkeypatch):
-    """Verify player.get_player_info extracts fields and handles geocode success/failure."""
+    """Verify player parsing works for both successful and missing geocode results."""
     mod = _load_target_module()
     # create player page HTML with position and born info
     player_html = (
@@ -155,7 +168,7 @@ def test_player_get_player_info_success_and_failure(monkeypatch):
 
 
 def test_team_process_team_and_read_teams(monkeypatch, tmp_path):
-    """Exercise team.process_team and read_teams using mocked HTTP and geocoder."""
+    """Exercise roster parsing and team loading with mocked HTTP and geocoding."""
     mod = _load_target_module()
     # roster page with two player anchors
     roster_html = (
@@ -205,7 +218,7 @@ def test_team_process_team_and_read_teams(monkeypatch, tmp_path):
 
 
 def test_make_folium_map_creates_output(monkeypatch, tmp_path):
-    """Verify make_folium_map writes an HTML file when given player data."""
+    """Verify the map writer creates a team HTML file in the local `output/` folder."""
     mod = _load_target_module()
     outdir = pathlib.Path("output")
     # ensure a clean output dir for test
@@ -246,7 +259,7 @@ def test_make_folium_map_creates_output(monkeypatch, tmp_path):
 
 
 def test_initial_setup_creates_output_and_clears_log(tmp_path):
-    """initial_setup should create output dir and remove existing log file."""
+    """Verify startup setup creates `output/` and removes the current run log."""
     mod = _load_target_module()
     # create output and a dummy log file
     outdir = pathlib.Path("output")
@@ -261,7 +274,7 @@ def test_initial_setup_creates_output_and_clears_log(tmp_path):
 
 
 def test_write_log_and_or_console_writes_when_all_teams(tmp_path):
-    """When ALL_TEAMS is True, write_log_and_or_console should persist log entries."""
+    """Verify log messages are written to disk when the all-teams mode is enabled."""
     mod = _load_target_module()
     outdir = pathlib.Path("output")
     outdir.mkdir(exist_ok=True)
@@ -277,7 +290,7 @@ def test_write_log_and_or_console_writes_when_all_teams(tmp_path):
 
 
 def test_make_folium_map_with_no_players_creates_output(monkeypatch, tmp_path):
-    """make_folium_map should still produce an output HTML even with no players."""
+    """Verify the map writer still creates an HTML file when there are no players."""
     mod = _load_target_module()
     outdir = pathlib.Path("output")
     # ensure a clean output dir for test
@@ -302,7 +315,7 @@ def test_make_folium_map_with_no_players_creates_output(monkeypatch, tmp_path):
 
 
 def test_process_list_of_teams_handles_roster_request_failure(monkeypatch):
-    """process_list_of_teams should not raise on roster request failures and should log."""
+    """Verify roster download failures are logged and do not stop processing."""
     mod = _load_target_module()
     teams = mod.read_teams()
     # force requests.get to raise for roster URL
@@ -324,7 +337,7 @@ def test_process_list_of_teams_handles_roster_request_failure(monkeypatch):
 
 
 def test_player_get_player_info_with_no_li_tags(monkeypatch):
-    """player.get_player_info should handle pages that contain no <li> tags gracefully."""
+    """Verify player parsing handles a page with no list items without crashing."""
     mod = _load_target_module()
     player = mod.Player("No Li Player")
     soup = bs4.BeautifulSoup("<html><body></body></html>", "html.parser")

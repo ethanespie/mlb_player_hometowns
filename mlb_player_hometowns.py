@@ -1,19 +1,21 @@
 ﻿"""
 MLB Player Hometowns Mapping Tool
 
-This module scrapes MLB team rosters from mlb.com, extracts players' information, geocodes their 
-home town locations using Nominatim, and generates both HTML (Google Maps) and KML (Google Earth)
-visualization files showing the geographical distribution of players' hometowns. Users can 
-generate maps for individual teams or all MLB teams at once.
+This module scrapes MLB team active rosters from mlb.com, extracts player biographical data,
+geocodes hometowns with Nominatim, and generates an HTML map of the resulting locations.
+To stay within public Nominatim limits, lookups are throttled, retried, and cached for the
+life of the process. The tool can generate maps for a single team or for all MLB teams.
 """
 
 # pylint: disable=import-error
 
 import os
 import re
+import time
 from datetime import datetime
 import requests
 import bs4
+from geopy.exc import GeocoderRateLimited, GeopyError
 from geopy.geocoders import Nominatim
 import folium
 from constants import State, TEAM_REGISTRY
@@ -24,13 +26,19 @@ LOG_NAME = f"MLB_player_hometowns_{START_TIME.strftime('%Y%m%d_%H%M')}.txt"
 GEOLOCATOR = Nominatim(user_agent="mlb_player_hometowns_app")
 ALL_TEAMS = False
 
+# simple in-memory cache + throttling controls to avoid public Nominatim 429s
+GEOCODE_CACHE = {}
+LAST_GEOCODE_REQUEST_AT = 0.0
+MIN_SECONDS_BETWEEN_GEOCODE_REQUESTS = 1.1
+MAX_GEOCODE_ATTEMPTS = 3
+
 
 class Team:
     """
-    Represents an MLB team with associated data and methods for processing roster information.
+    Represents an MLB team and its roster-processing metadata.
 
-    Stores team identifiers (full name, URL code, short code) and display properties (web color).
-    Provides functionality to process team rosters and extract player information from MLB.com.
+    Each team stores its full display name, MLB.com URL code, short code, and map color.
+    The class also provides the roster-processing workflow used to build per-team maps.
     """
 
     player_pages_not_reached = 0
@@ -101,10 +109,11 @@ class Team:
 
 class Player:
     """
-    Represents an MLB player with associated biographical and location data.
+    Represents a single MLB player and the parsed hometown data for map generation.
 
-    Stores player information including name, position, hometown, and geocoded coordinates.
-    Provides methods to extract and process player information from MLB.com player pages.
+    Player instances store a name, position, hometown string, and geocoded coordinates.
+    Default values are sentinel placeholders used when the source page lacks data or a
+    geocode lookup fails.
     """
 
     def __init__(self, player_name):
@@ -119,7 +128,12 @@ class Player:
 
     def get_player_info(self, soup):
         """
-        Extract player information from their MLB.com page and attempt to geocode hometown.
+        Extract player information from a player page and geocode the hometown if present.
+
+        The method parses position and birthplace information from the supplied HTML soup,
+        normalizes the hometown string, and geocodes it using the throttled cache-aware
+        helper. It returns counts for pages with missing hometowns and for hometowns that
+        could not be geocoded.
         """
         players_with_null_hometowns = 0
         players_not_geocoded = 0
@@ -139,18 +153,19 @@ class Player:
                     tag_string[tag_string.find(" in ") + 4 : tag_string.find("</li>")]
                 ).strip()
                 self.hometown = prep_place_name_for_geocode(self.hometown)
-                try:
-                    location = GEOLOCATOR.geocode(self.hometown, timeout=10)
-                    self.hometown_lat = round(location.latitude, 7)
-                    self.hometown_long = round(location.longitude, 7)
-
-                except (AttributeError, ValueError, TypeError) as e:
-                    # AttributeError: location is None (no geocoding result)
-                    # ValueError: invalid coordinate values
-                    # TypeError: unexpected data type issues
-                    write_log_and_or_console(
-                        f"ERROR: Failed to geocode {self.hometown} for {self.player_name}: {e}"
-                    )
+                # use guarded geocode helper that caches, throttles and retries on 429
+                location = geocode_hometown(self.hometown)
+                if location is not None:
+                    try:
+                        self.hometown_lat = round(location.latitude, 7)
+                        self.hometown_long = round(location.longitude, 7)
+                    except (AttributeError, ValueError, TypeError):
+                        write_log_and_or_console(
+                            f"ERROR: Invalid geocode result for {self.hometown} for {self.player_name}"
+                        )
+                        players_not_geocoded += 1
+                        continue
+                else:
                     players_not_geocoded += 1
                     continue
 
@@ -176,7 +191,10 @@ class Player:
 
 def initial_setup():
     """
-    Create output directory if needed and clean up any existing log files.
+    Create the output directory and clear the current run's log file if present.
+
+    The output folder is created relative to the current working directory. Any existing log
+    file for the current timestamp is removed so reruns in the same minute start cleanly.
     """
     # Create 'output' sub folder if it doesn't exist
     try:
@@ -192,7 +210,10 @@ def initial_setup():
 
 def prompt_user():
     """
-    Display team options and get user selection for processing.
+    Display team choices and return the selected team list.
+
+    Returns either a one-item list for a single team or the full list of teams when the
+    user presses Enter to generate maps for every team.
     """
     global ALL_TEAMS
     teams = read_teams()
@@ -221,9 +242,10 @@ def prompt_user():
 
 def process_list_of_teams(teams):
     """
-    Called by if-name-main, which passes teams, a list of Team objects.
-    For each Team, it calls process_team to get list of players.
-    Then calls the method to create gmplot and kml files.
+    Process each team, log progress, and write the HTML map output.
+
+    For each team, the roster page is fetched, parsed into Player objects, and passed to
+    `make_folium_map()` to write the HTML file in the local `output/` directory.
     """
 
     for team in teams:
@@ -248,7 +270,7 @@ def process_list_of_teams(teams):
 
 
 def read_teams():
-    """ Read team data from TEAM_REGISTRY and return a list of Team objects."""
+    """Return the configured MLB teams as `Team` objects."""
     return [
         Team(meta.full_name, meta.url_code, meta.short_code, meta.web_color)
         for meta in TEAM_REGISTRY.values()
@@ -257,7 +279,10 @@ def read_teams():
 
 def prep_place_name_for_geocode(player_hometown):
     """
-    Clean and standardize hometown strings to improve geocoding success.
+    Normalize hometown text before geocoding.
+
+    This fixes a few common MLB.com quirks and misspellings so public geocoding services are
+    more likely to return a useful result.
     """
     # Most players' 2-letter US state codes worked but for some, "CA" ended up in Canada,
     # and there were a few other random errors, so, replace 2-letter state code with name.
@@ -279,10 +304,63 @@ def prep_place_name_for_geocode(player_hometown):
     return player_hometown
 
 
+def _wait_for_geocode_slot():
+    """Throttle geocode requests so public Nominatim calls stay spaced apart."""
+    global LAST_GEOCODE_REQUEST_AT
+
+    elapsed = time.monotonic() - LAST_GEOCODE_REQUEST_AT
+    if elapsed < MIN_SECONDS_BETWEEN_GEOCODE_REQUESTS:
+        time.sleep(MIN_SECONDS_BETWEEN_GEOCODE_REQUESTS - elapsed)
+    LAST_GEOCODE_REQUEST_AT = time.monotonic()
+
+
+def geocode_hometown(hometown):
+    """Geocode a hometown with caching, throttling, and retry/backoff on 429s.
+
+    Returns a geopy Location-like object or None on failure. Successful results and
+    failures are cached in memory for the life of the process so repeated hometowns do
+    not trigger repeated external lookups.
+    """
+    # quick cache hit
+    if hometown in GEOCODE_CACHE:
+        return GEOCODE_CACHE[hometown]
+
+    delay_seconds = MIN_SECONDS_BETWEEN_GEOCODE_REQUESTS
+    last_error = None
+
+    for attempt in range(1, MAX_GEOCODE_ATTEMPTS + 1):
+        _wait_for_geocode_slot()
+        try:
+            location = GEOLOCATOR.geocode(hometown, timeout=10)
+            GEOCODE_CACHE[hometown] = location
+            return location
+        except GeocoderRateLimited as err:
+            last_error = err
+            if attempt >= MAX_GEOCODE_ATTEMPTS:
+                break
+            write_log_and_or_console(
+                f"WARNING: Geocoder rate limited for '{hometown}' (attempt {attempt}/{MAX_GEOCODE_ATTEMPTS}). Retrying..."
+            )
+            time.sleep(delay_seconds)
+            delay_seconds *= 2
+        except (GeopyError, AttributeError, ValueError, TypeError) as err:
+            last_error = err
+            write_log_and_or_console(f"ERROR: Failed to geocode {hometown}: {err}")
+            break
+
+    if last_error is not None:
+        write_log_and_or_console(f"ERROR: Could not geocode {hometown} after retries.")
+
+    GEOCODE_CACHE[hometown] = None
+    return None
+
+
 def make_folium_map(players, team_code, team_color_hex, num_missing):
     """
-    Generate a Leaflet (Folium) HTML map of player hometowns for one team.
-    Saves a single standalone .html into ./output
+    Generate a Folium HTML map of player hometowns for one team.
+
+    The map is written as a standalone `.html` file in the local `output/` directory and
+    uses the provided team color for the player markers.
     """
 
     # --- Basemap switcher (OSM + CartoDB Positron + CartoDB Dark) ---
@@ -359,7 +437,7 @@ def make_folium_map(players, team_code, team_color_hex, num_missing):
 
 def write_log_and_or_console(text):
     """
-    Output text to console and optionally to log file when processing all teams.
+    Print a message and, when running all teams, append it to the run log.
     """
     print(text)
     if ALL_TEAMS:
