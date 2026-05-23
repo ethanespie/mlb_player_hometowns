@@ -36,9 +36,9 @@ https://www.cbssports.com/mlb/news/map-of-the-day-birthplace-of-all-professional
 
 
 
-### Run it
+### Run the Script
 
-    `python .\mlb_player_hometowns.py`
+`python .\mlb_player_hometowns.py`
 
 
 ### Running Tests + Coverage Report
