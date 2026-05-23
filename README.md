@@ -38,7 +38,10 @@ https://www.cbssports.com/mlb/news/map-of-the-day-birthplace-of-all-professional
 
 ### Run the Script
 
+Run
 `python .\mlb_player_hometowns.py`
+
+Specify one of the teams with its code shown in the script, or hit [Enter] to do all 30 teams. The script will create a .html file(s) in the "output" sub folder, which you can open with a browser to view the map.
 
 
 ### Running Tests + Coverage Report
